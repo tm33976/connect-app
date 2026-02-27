@@ -1,7 +1,6 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
-const path = require("path");
-const fs = require("fs");
+const cloudinary = require("cloudinary").v2;
 const User = require("../models/User");
 const { protect } = require("../middleware/auth");
 const { upload } = require("../middleware/upload");
@@ -127,29 +126,28 @@ router.patch("/avatar", protect, upload.single("avatar"), async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ error: "User not found." });
+
+    // If client sends remove=true, clear the avatar
     if (req.body.remove === "true") {
-      if (user.avatar) {
-        const old = path.join(__dirname, "../../uploads", user.avatar.replace(/^\/uploads\//, ""));
-        fs.unlink(old, () => {});
+      if (user.avatarPublicId) {
+        await cloudinary.uploader.destroy(user.avatarPublicId).catch(() => {});
       }
       user.avatar = null;
+      user.avatarPublicId = null;
       await user.save();
       return res.json({ user });
     }
 
     if (!req.file) return res.status(400).json({ error: "No file uploaded." });
 
-    // Delete old avatar file if present
-    if (user.avatar) {
-      const old = path.join(__dirname, "../../uploads", user.avatar.replace(/^\/uploads\//, ""));
-      fs.unlink(old, () => {});
+    // Delete old avatar from Cloudinary if present (stored as public_id)
+    if (user.avatarPublicId) {
+      await cloudinary.uploader.destroy(user.avatarPublicId).catch(() => {});
     }
 
-    // Store relative URL so the client can resolve it via API_BASE
-    user.avatar = `/uploads/${req.file.destination.split("uploads")[1].replace(/^[\\/]/, "")}/${req.file.filename}`.replace(/\\/g, "/");
-    // Normalise to /uploads/images/<filename>
-    const rel = req.file.path.split("uploads")[1].replace(/\\/g, "/");
-    user.avatar = `/uploads${rel}`;
+    // With Cloudinary, req.file.path = full HTTPS URL, req.file.filename = public_id
+    user.avatar = req.file.path;
+    user.avatarPublicId = req.file.filename;
     await user.save();
 
     res.json({ user });

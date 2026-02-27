@@ -44,7 +44,7 @@ router.get("/:conversationId", async (req, res) => {
   }
 });
 
-// POST /api/messages send text or file
+// POST /api/messages — send text or file
 router.post("/", upload.single("file"), async (req, res) => {
   try {
     let { conversationId, text } = req.body;
@@ -75,13 +75,21 @@ router.post("/", upload.single("file"), async (req, res) => {
 
     let attachment = null;
     if (file) {
-      const fileType = getFileType(file.mimetype);
-      const relativePath = "/uploads/" + fileType + "s/" + file.filename;
+      const mime = file.mimetype || "";
+      const ext  = (file.originalname || "").split(".").pop().toLowerCase();
+      const imgExts = ["jpg","jpeg","png","gif","webp","svg","bmp","tiff"];
+      const vidExts = ["mp4","webm","ogg","mov","avi","mkv"];
+      let fileType;
+      if (mime.startsWith("image/") || imgExts.includes(ext))      fileType = "image";
+      else if (mime.startsWith("video/") || vidExts.includes(ext)) fileType = "video";
+      else                                                          fileType = getFileType(mime);
+
+      // With Cloudinary, file.path is the full HTTPS URL
       attachment = {
-        url: relativePath,
+        url:          file.path,
         originalName: file.originalname,
-        mimetype: file.mimetype,
-        size: file.size,
+        mimetype:     mime,
+        size:         file.size,
         fileType,
       };
     }
@@ -127,6 +135,8 @@ router.post("/", upload.single("file"), async (req, res) => {
     res.status(500).json({ error: err.message || "Failed to send message." });
   }
 });
+
+// PATCH /api/messages/:conversationId/read
 router.patch("/:conversationId/read", async (req, res) => {
   try {
     const { conversationId } = req.params;

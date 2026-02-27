@@ -35,6 +35,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null, 
     },
+    avatarPublicId: {
+      type: String,
+      default: null,
+      select: false,
+    },
     avatarColor: {
       type: String,
       default: () => {
@@ -58,14 +63,20 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Hash password before saving
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });
+
+// Compare passwords
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
+
+// Remove sensitive fields from output
 userSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.password;
@@ -73,5 +84,7 @@ userSchema.methods.toJSON = function () {
   return obj;
 };
 
+// Index for search
 userSchema.index({ name: "text", email: "text" });
+
 module.exports = mongoose.model("User", userSchema);
